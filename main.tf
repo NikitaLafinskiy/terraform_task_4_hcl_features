@@ -34,19 +34,26 @@ resource "azurerm_subnet" "internal" {
   address_prefixes     = ["10.0.2.0/24"]
 }
 
+locals {
+  network_interface_names = ["main", "secondary", "someothername"]
+}
+
 resource "azurerm_network_interface" "main" {
-  name                = "${var.prefix}-nic"
+  for_each = toset(network_interface_names)
+
+  name                = "${var.prefix}-nic-${each.key}"
   location            = azurerm_resource_group.example.location
   resource_group_name = azurerm_resource_group.example.name
 
   ip_configuration {
-    name                          = "testconfiguration1"
+    name                          = "testconfiguration1-${each.key}"
     subnet_id                     = azurerm_subnet.internal.id
     private_ip_address_allocation = "Dynamic"
   }
 }
 
 resource "azurerm_virtual_machine" "main" {
+  count = 3
   name                  = "${var.prefix}-vm"
   location              = azurerm_resource_group.example.location
   resource_group_name   = azurerm_resource_group.example.name
@@ -76,4 +83,78 @@ resource "azurerm_virtual_machine" "main" {
   tags = {
     environment = "staging"
   }
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+locals {
+  security_rules = [
+    {
+    name                       = "test123"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  },
+  {
+    name                       = "test124"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  },
+  {
+    name                       = "test125"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  },
+  ]
+}
+
+resource "azurerm_network_security_group" "network_security_group" {
+  name                = "acceptanceTestSecurityGroup1"
+  location            = azurerm_resource_group.example.location
+  resource_group_name = azurerm_resource_group.example.name
+
+  dynamic "security_rule" {
+    for_each = local.security_rules
+    content {
+      name                       = security_rule.value.name
+      priority                   = security_rule.value.priority
+      direction                  = security_rule.value.direction
+      access                     = security_rule.value.access
+      protocol                   = security_rule.value.protocol
+      source_port_range          = security_rule.value.source_port_range
+      destination_port_range     = security_rule.value.destination_port_range
+      source_address_prefix      = security_rule.value.source_address_prefix
+      destination_address_prefix = security_rule.value.destination_address_prefix
+    }
+  }
+
+  tags = {
+    environment = "Production"
+  }
+}
+
+output "vm_name" {
+  value = upper(azurerm_virtual_machine.main.name)
+}
+
+output "vm_ids" {
+  value = [for vm in azurerm_virtual_machine.main : vm.id]
 }
